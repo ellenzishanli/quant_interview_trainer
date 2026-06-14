@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Security rules for the Quant Interview Trainer discussion forum.
+// Paste these into Firebase Console → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Discussion comments live under each problem.
+    match /discussions/{problemId}/comments/{commentId} {
+      // Anyone (even signed-out) can read the discussion.
+      allow read: if true;
+
+      // Only signed-in users can post, and only as themselves.
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 4000
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 120;
+
+      // Authors can delete their own comments. (Edit is disabled for now.)
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Leaderboard: one public doc per user with their solved count.
+    match /users/{uid} {
+      // Anyone can read the leaderboard.
+      allow read: if true;
+
+      // Users can only write their own doc, with sane field types.
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.solved is int
+        && request.resource.data.solved >= 0
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 120;
+    }
+
+    // Abuse reports: any signed-in user can file one; nobody can read them
+    // from the client (review them in the Firebase console).
+    match /reports/{reportId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+  }
+}

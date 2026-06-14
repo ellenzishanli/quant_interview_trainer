@@ -2,18 +2,20 @@
 (function () {
   const DATA = window.QUANT_DATA;
   const Store = window.Store;
+  const t = (k, v) => (window.I18n ? window.I18n.t(k, v) : k);
 
   // ---------- helpers ----------
+  // status/difficulty meta: labels are resolved through i18n at render time.
   const STATUS_META = {
-    unseen:     { label: "Not started", short: "—",  cls: "st-unseen" },
-    attempting: { label: "Attempting",  short: "◐",  cls: "st-attempting" },
-    solved:     { label: "Solved",      short: "✓",  cls: "st-solved" },
-    review:     { label: "Review",      short: "↻",  cls: "st-review" }
+    unseen:     { key: "status.unseen",     short: "—",  cls: "st-unseen" },
+    attempting: { key: "status.attempting", short: "◐",  cls: "st-attempting" },
+    solved:     { key: "status.solved",      short: "✓",  cls: "st-solved" },
+    review:     { key: "status.review",      short: "↻",  cls: "st-review" }
   };
   const DIFF_META = {
-    easy:   { label: "Easy",   cls: "d-easy" },
-    medium: { label: "Medium", cls: "d-medium" },
-    hard:   { label: "Hard",   cls: "d-hard" }
+    easy:   { key: "diff.easy",   cls: "d-easy" },
+    medium: { key: "diff.medium", cls: "d-medium" },
+    hard:   { key: "diff.hard",   cls: "d-hard" }
   };
 
   function slug(s) {
@@ -22,27 +24,41 @@
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+  // Render markdown + LaTeX. Math is extracted and KaTeX-rendered BEFORE markdown
+  // runs, so currency like "\$100" (which markdown turns into a literal "$") is
+  // never mistaken for a math delimiter.
   function md(s) {
     if (!s) return "";
-    if (window.marked) return window.marked.parse(s);
-    return "<p>" + esc(s).replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
-  }
-  function typeset(el) {
-    if (window.renderMathInElement) {
-      try {
-        window.renderMathInElement(el, {
-          delimiters: [
-            { left: "$$", right: "$$", display: true },
-            { left: "$", right: "$", display: false }
-          ],
-          throwOnError: false
-        });
-      } catch (e) {}
+    const store = [];
+    function stash(tex, display) {
+      const token = "XMATHX" + store.length + "XENDX";
+      store.push({ tex: tex, display: display });
+      return token;
     }
+    s = s.replace(/(^|[^\\])\$\$([\s\S]+?)\$\$/g, (m, pre, tex) => pre + stash(tex, true));
+    s = s.replace(/(^|[^\\])\$([^$\n]+?)\$/g, (m, pre, tex) => pre + stash(tex, false));
+
+    let html = window.marked
+      ? window.marked.parse(s)
+      : "<p>" + esc(s).replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
+
+    html = html.replace(/XMATHX(\d+)XENDX/g, (m, i) => {
+      const item = store[i];
+      if (window.katex) {
+        try {
+          return window.katex.renderToString(item.tex, { displayMode: item.display, throwOnError: false });
+        } catch (e) {
+          return esc(item.tex);
+        }
+      }
+      return (item.display ? "$$" : "$") + esc(item.tex) + (item.display ? "$$" : "$");
+    });
+    return html;
   }
+  function typeset(el) {}
 
   // ---------- build a flat index of problems ----------
-  const INDEX = [];          // ordered flat list
+  const INDEX = [];
   const BY_ID = {};
   DATA.chapters.forEach((ch) => {
     ch.topics.forEach((tp) => {
@@ -94,12 +110,12 @@
   function diffBadge(d) {
     if (!d) return "";
     const m = DIFF_META[d];
-    return `<span class="badge ${m.cls}">${m.label}</span>`;
+    return `<span class="badge ${m.cls}">${t(m.key)}</span>`;
   }
   function statusDot(id) {
     const st = Store.get(id).status;
     const m = STATUS_META[st];
-    return `<span class="status-dot ${m.cls}" title="${m.label}">${m.short}</span>`;
+    return `<span class="status-dot ${m.cls}" title="${t(m.key)}">${m.short}</span>`;
   }
   function progressBar(done, total) {
     const pct = total ? Math.round((done / total) * 100) : 0;
@@ -144,16 +160,16 @@
 
     const cards = `
       <div class="stat-cards">
-        <div class="stat-card"><div class="stat-num">${g.solved}</div><div class="stat-lbl">Solved</div></div>
-        <div class="stat-card"><div class="stat-num">${g.attempting}</div><div class="stat-lbl">Attempting</div></div>
-        <div class="stat-card"><div class="stat-num">${g.review}</div><div class="stat-lbl">To review</div></div>
-        <div class="stat-card"><div class="stat-num">${g.starred}</div><div class="stat-lbl">Starred</div></div>
-        <div class="stat-card accent"><div class="stat-num">${streak}🔥</div><div class="stat-lbl">Day streak</div></div>
+        <div class="stat-card"><div class="stat-num">${g.solved}</div><div class="stat-lbl">${t("dash.solved")}</div></div>
+        <div class="stat-card"><div class="stat-num">${g.attempting}</div><div class="stat-lbl">${t("dash.attempting")}</div></div>
+        <div class="stat-card"><div class="stat-num">${g.review}</div><div class="stat-lbl">${t("dash.toReview")}</div></div>
+        <div class="stat-card"><div class="stat-num">${g.starred}</div><div class="stat-lbl">${t("dash.starred")}</div></div>
+        <div class="stat-card accent"><div class="stat-num">${streak}🔥</div><div class="stat-lbl">${t("dash.streak")}</div></div>
       </div>`;
 
     const overall = `
       <div class="overall">
-        <div class="overall-top"><span>Overall progress</span><span>${g.solved} / ${g.total} solved · ${g.available} with full solutions</span></div>
+        <div class="overall-top"><span>${t("dash.overall")}</span><span>${t("dash.overallMeta", { solved: g.solved, total: g.total, available: g.available })}</span></div>
         ${progressBar(g.solved, g.total)}
         <div class="overall-pct">${pct}%</div>
       </div>`;
@@ -161,16 +177,18 @@
     const chapters = DATA.chapters
       .map((ch) => {
         const s = chapterStats(ch);
+        const meta = [t("dash.solvableNow", { n: s.available })];
+        if (s.available < s.total) meta.push(t("dash.comingSoon", { n: s.total - s.available }));
+        if (s.review) meta.push(t("dash.flaggedReview", { n: s.review }));
         return `<a class="dash-chapter" href="#/topic/${encodeURIComponent(ch.topics[0].id)}">
-          <div class="dash-ch-head"><b>Chapter ${ch.num} · ${esc(ch.title)}</b><span>${s.solved}/${s.total}</span></div>
+          <div class="dash-ch-head"><b>${t("dash.chapter", { num: ch.num, title: esc(ch.title) })}</b><span>${s.solved}/${s.total}</span></div>
           <p class="dash-ch-blurb">${esc(ch.blurb)}</p>
           ${progressBar(s.solved, s.total)}
-          <div class="dash-ch-meta">${s.available} solvable now${s.available < s.total ? ` · ${s.total - s.available} coming soon` : ""}${s.review ? ` · ${s.review} flagged for review` : ""}</div>
+          <div class="dash-ch-meta">${meta.join(" · ")}</div>
         </a>`;
       })
       .join("");
 
-    // a few suggested next problems: attempting/review first, then unseen real ones
     const next = INDEX.filter((e) => isReal(e.problem))
       .map((e) => ({ e, st: Store.get(e.id).status }))
       .sort((a, b) => {
@@ -185,13 +203,13 @@
     const main = document.getElementById("main");
     main.innerHTML = `
       <div class="view-pad">
-        <h1>Your dashboard</h1>
-        <p class="subtle">Tracking progress through <i>${esc(DATA.meta.source)}</i>. Everything is saved in this browser.</p>
+        <h1>${t("dash.title")}</h1>
+        <p class="subtle">${t("dash.subtitle", { source: "<i>" + esc(DATA.meta.source) + "</i>" })}</p>
         ${cards}
         ${overall}
-        <h2>Pick up where you left off</h2>
-        <div class="prob-list">${next || '<p class="subtle">All caught up — nice. Browse a chapter to keep going.</p>'}</div>
-        <h2>Chapters</h2>
+        <h2>${t("dash.pickUp")}</h2>
+        <div class="prob-list">${next || '<p class="subtle">' + t("dash.allCaught") + "</p>"}</div>
+        <h2>${t("dash.chapters")}</h2>
         <div class="dash-chapters">${chapters}</div>
       </div>`;
     typeset(main);
@@ -205,7 +223,7 @@
         ${statusDot(e.id)}
         <span class="prob-row-title">${esc(pr.title)}</span>
         <span class="prob-row-meta">${e.chapter.num}.${e.topic.id.split(".")[1]} ${esc(e.topic.title)}</span>
-        <span class="badge soon-badge">coming soon</span>
+        <span class="badge soon-badge">${t("common.soon")}</span>
       </div>`;
     }
     return `<a class="prob-row" href="#/problem/${encodeURIComponent(e.id)}">
@@ -220,14 +238,14 @@
     let found = null;
     DATA.chapters.forEach((ch) => ch.topics.forEach((tp) => { if (tp.id === topicId) found = { ch, tp }; }));
     const main = document.getElementById("main");
-    if (!found) { main.innerHTML = '<div class="view-pad"><p>Topic not found.</p></div>'; return; }
+    if (!found) { main.innerHTML = `<div class="view-pad"><p>${t("topic.notFound")}</p></div>`; return; }
     const { ch, tp } = found;
     const rows = tp.problems
       .map((pr) => problemRow(BY_ID[tp.id + ":" + slug(pr.title)]))
       .join("");
     main.innerHTML = `
       <div class="view-pad">
-        <div class="breadcrumb"><a href="#/">Dashboard</a> › Chapter ${ch.num} · ${esc(ch.title)}</div>
+        <div class="breadcrumb"><a href="#/">${t("common.dashboard")}</a> › Ch ${ch.num} · ${esc(ch.title)}</div>
         <h1>${tp.id} ${esc(tp.title)}</h1>
         ${tp.note ? `<div class="topic-note">${md(tp.note)}</div>` : ""}
         <div class="prob-list">${rows}</div>
@@ -235,28 +253,68 @@
     typeset(main);
   }
 
+  function viewList() {
+    const main = document.getElementById("main");
+    const starred = INDEX.filter((e) => Store.get(e.id).starred);
+    const review = INDEX.filter((e) => Store.get(e.id).status === "review");
+
+    const starHtml = starred.length
+      ? `<div class="prob-list">${starred.map(problemRow).join("")}</div>`
+      : `<p class="subtle">${t("list.emptyStar")}</p>`;
+    const reviewHtml = review.length
+      ? `<div class="prob-list">${review.map(problemRow).join("")}</div>`
+      : `<p class="subtle">${t("list.emptyReview")}</p>`;
+
+    main.innerHTML = `
+      <div class="view-pad">
+        <h1>${t("list.title")}</h1>
+        <p class="subtle">${t("list.subtitle")}</p>
+        <h2>★ ${t("list.starred")} <span class="count-chip">${starred.length}</span></h2>
+        ${starHtml}
+        <h2>↻ ${t("list.review")} <span class="count-chip">${review.length}</span></h2>
+        ${reviewHtml}
+      </div>`;
+    typeset(main);
+  }
+
+  function viewLeaderboard() {
+    const main = document.getElementById("main");
+    main.innerHTML = `
+      <div class="view-pad">
+        <h1>${t("lb.title")}</h1>
+        <p class="subtle">${t("lb.subtitle")}</p>
+        <div id="leaderboard-body"></div>
+      </div>`;
+    if (window.Leaderboard) window.Leaderboard.render(main.querySelector("#leaderboard-body"));
+  }
+
+  // publish the signed-in user's solved count for the leaderboard
+  function publishMyStats() {
+    if (window.Leaderboard) window.Leaderboard.publish(globalStats().solved);
+  }
+
   function viewBrowse() {
     const main = document.getElementById("main");
     main.innerHTML = `
       <div class="view-pad">
-        <h1>Browse all problems</h1>
+        <h1>${t("browse.title")}</h1>
         <div class="filters">
-          <input id="f-search" class="f-search" type="text" placeholder="Search problems, tags…">
+          <input id="f-search" class="f-search" type="text" placeholder="${t("browse.search")}">
           <div class="f-group" id="f-diff">
-            <span class="f-label">Difficulty:</span>
-            <label><input type="checkbox" value="easy">Easy</label>
-            <label><input type="checkbox" value="medium">Medium</label>
-            <label><input type="checkbox" value="hard">Hard</label>
+            <span class="f-label">${t("browse.difficulty")}</span>
+            <label><input type="checkbox" value="easy">${t("diff.easy")}</label>
+            <label><input type="checkbox" value="medium">${t("diff.medium")}</label>
+            <label><input type="checkbox" value="hard">${t("diff.hard")}</label>
           </div>
           <div class="f-group" id="f-status">
-            <span class="f-label">Status:</span>
-            <label><input type="checkbox" value="unseen">Not started</label>
-            <label><input type="checkbox" value="attempting">Attempting</label>
-            <label><input type="checkbox" value="solved">Solved</label>
-            <label><input type="checkbox" value="review">Review</label>
+            <span class="f-label">${t("browse.status")}</span>
+            <label><input type="checkbox" value="unseen">${t("status.unseen")}</label>
+            <label><input type="checkbox" value="attempting">${t("status.attempting")}</label>
+            <label><input type="checkbox" value="solved">${t("status.solved")}</label>
+            <label><input type="checkbox" value="review">${t("status.review")}</label>
           </div>
-          <label class="f-toggle"><input type="checkbox" id="f-star">★ Starred only</label>
-          <label class="f-toggle"><input type="checkbox" id="f-real" checked>Solvable only</label>
+          <label class="f-toggle"><input type="checkbox" id="f-star">${t("browse.starredOnly")}</label>
+          <label class="f-toggle"><input type="checkbox" id="f-real" checked>${t("browse.solvableOnly")}</label>
         </div>
         <div class="browse-count" id="browse-count"></div>
         <div class="prob-list" id="browse-list"></div>
@@ -282,8 +340,9 @@
         }
         return true;
       });
-      document.getElementById("browse-count").textContent = matches.length + " problem" + (matches.length === 1 ? "" : "s");
-      document.getElementById("browse-list").innerHTML = matches.map(problemRow).join("") || '<p class="subtle">No matches.</p>';
+      document.getElementById("browse-count").textContent =
+        matches.length === 1 ? t("browse.count", { n: 1 }) : t("browse.countPlural", { n: matches.length });
+      document.getElementById("browse-list").innerHTML = matches.map(problemRow).join("") || `<p class="subtle">${t("browse.noMatches")}</p>`;
     }
 
     main.querySelectorAll(".filters input").forEach((el) => {
@@ -296,11 +355,10 @@
   function viewProblem(id) {
     const e = BY_ID[id];
     const main = document.getElementById("main");
-    if (!e) { main.innerHTML = '<div class="view-pad"><p>Problem not found.</p></div>'; return; }
+    if (!e) { main.innerHTML = `<div class="view-pad"><p>${t("prob.notFound")}</p></div>`; return; }
     const pr = e.problem;
     const p = Store.get(id);
 
-    // neighbors within the flat index
     const realList = INDEX;
     const pos = realList.findIndex((x) => x.id === id);
     const prev = pos > 0 ? realList[pos - 1] : null;
@@ -308,69 +366,71 @@
 
     if (!isReal(pr)) {
       main.innerHTML = `<div class="view-pad">
-        <div class="breadcrumb"><a href="#/">Dashboard</a> › <a href="#/topic/${encodeURIComponent(e.topic.id)}">${e.topic.id} ${esc(e.topic.title)}</a></div>
+        <div class="breadcrumb"><a href="#/">${t("common.dashboard")}</a> › <a href="#/topic/${encodeURIComponent(e.topic.id)}">${e.topic.id} ${esc(e.topic.title)}</a></div>
         <h1>${esc(pr.title)}</h1>
-        <div class="soon-panel">📋 This problem is scaffolded from the book's table of contents but not transcribed yet.<br>It belongs to <b>Chapter ${e.chapter.num} · ${esc(e.topic.title)}</b>.</div>
+        <div class="soon-panel">${t("prob.scaffolded")}<br>${t("prob.belongsTo")} <b>Ch ${e.chapter.num} · ${esc(e.topic.title)}</b>.</div>
         ${navButtons(prev, nextN)}
       </div>`;
       return;
     }
 
-    const tags = (pr.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
+    const tags = (pr.tags || []).map((tg) => `<span class="tag">${esc(tg)}</span>`).join("");
     const statusBtns = Store.STATUSES.map((s) => {
       const m = STATUS_META[s];
-      return `<button class="status-btn ${m.cls}${p.status === s ? " on" : ""}" data-status="${s}">${m.label}</button>`;
+      return `<button class="status-btn ${m.cls}${p.status === s ? " on" : ""}" data-status="${s}">${t(m.key)}</button>`;
     }).join("");
 
     main.innerHTML = `
       <div class="view-pad problem-view">
-        <div class="breadcrumb"><a href="#/">Dashboard</a> › <a href="#/topic/${encodeURIComponent(e.topic.id)}">${e.topic.id} ${esc(e.topic.title)}</a></div>
+        <div class="breadcrumb"><a href="#/">${t("common.dashboard")}</a> › <a href="#/topic/${encodeURIComponent(e.topic.id)}">${e.topic.id} ${esc(e.topic.title)}</a></div>
         <div class="problem-head">
           <h1>${esc(pr.title)}</h1>
           <button id="star-btn" class="star-btn${p.starred ? " on" : ""}" title="Star">${p.starred ? "★" : "☆"}</button>
         </div>
         <div class="problem-meta">${diffBadge(pr.difficulty)} ${tags}</div>
 
-        <div class="status-row"><span class="status-row-lbl">Mark as:</span>${statusBtns}</div>
+        <div class="status-row"><span class="status-row-lbl">${t("prob.markAs")}</span>${statusBtns}</div>
 
         <section class="block statement">
-          <h3>Problem</h3>
+          <h3>${t("prob.problem")}</h3>
           ${md(pr.statement)}
         </section>
 
         ${pr.hint ? `
         <details class="block reveal hint">
-          <summary>💡 Show hint</summary>
+          <summary>${t("prob.showHint")}</summary>
           <div class="reveal-body">${md(pr.hint)}</div>
         </details>` : ""}
 
         <details class="block reveal solution">
-          <summary>🔑 Show solution</summary>
+          <summary>${t("prob.showSolution")}</summary>
           <div class="reveal-body">${md(pr.solution)}</div>
         </details>
 
         ${pr.keyIdea ? `
         <section class="block key-idea">
-          <h3>Key idea / takeaway</h3>
+          <h3>${t("prob.keyIdea")}</h3>
           ${md(pr.keyIdea)}
         </section>` : ""}
 
         <section class="block notes">
-          <h3>Your notes</h3>
-          <textarea id="notes" placeholder="Jot down your approach, where you got stuck, the trick to remember…">${esc(p.notes || "")}</textarea>
+          <h3>${t("prob.yourNotes")}</h3>
+          <textarea id="notes" placeholder="${t("prob.notesPlaceholder")}">${esc(p.notes || "")}</textarea>
           <div class="notes-saved" id="notes-saved"></div>
         </section>
+
+        <div id="discussion"></div>
 
         ${navButtons(prev, nextN)}
       </div>`;
 
-    // wire up interactions
     main.querySelectorAll(".status-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const newStatus = btn.dataset.status;
         const cur = Store.get(id).status;
         Store.set(id, { status: cur === newStatus ? "unseen" : newStatus });
         renderSidebar();
+        publishMyStats();
         main.querySelectorAll(".status-btn").forEach((b) => b.classList.remove("on"));
         if (Store.get(id).status === newStatus) btn.classList.add("on");
       });
@@ -383,24 +443,24 @@
       starBtn.textContent = v ? "★" : "☆";
     });
     const notes = main.querySelector("#notes");
-    let t;
+    let tmr;
     notes.addEventListener("input", () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
+      clearTimeout(tmr);
+      tmr = setTimeout(() => {
         Store.set(id, { notes: notes.value });
         const s = main.querySelector("#notes-saved");
-        s.textContent = "Saved ✓";
+        s.textContent = t("prob.saved");
         setTimeout(() => (s.textContent = ""), 1500);
       }, 500);
     });
 
-    // typeset only the static content (not the textarea)
     main.querySelectorAll(".block.statement, .reveal-body, .key-idea").forEach(typeset);
-
-    // typeset solution/hint when first opened (KaTeX already ran, but re-run is cheap & safe)
     main.querySelectorAll("details.reveal").forEach((d) =>
       d.addEventListener("toggle", () => { if (d.open) typeset(d); })
     );
+
+    // discussion forum (no-op teaser if Firebase isn't configured)
+    if (window.Forum) window.Forum.mount(main.querySelector("#discussion"), id);
   }
 
   function navButtons(prev, nextN) {
@@ -416,21 +476,26 @@
     if (!h || h === "dashboard") return { name: "dashboard" };
     const parts = h.split("/");
     if (parts[0] === "browse") return { name: "browse" };
+    if (parts[0] === "list") return { name: "list" };
+    if (parts[0] === "leaderboard") return { name: "leaderboard" };
     if (parts[0] === "topic") return { name: "topic", id: decodeURIComponent(parts[1] || "") };
     if (parts[0] === "problem") return { name: "problem", id: decodeURIComponent(parts[1] || "") };
     return { name: "dashboard" };
   }
 
   function route() {
+    if (window.Forum) window.Forum.unmount();
     const r = parseHash();
     if (r.name === "browse") viewBrowse();
+    else if (r.name === "list") viewList();
+    else if (r.name === "leaderboard") viewLeaderboard();
     else if (r.name === "topic") viewTopic(r.id);
     else if (r.name === "problem") viewProblem(r.id);
     else viewDashboard();
     renderSidebar();
-    // highlight top nav
     document.querySelectorAll(".topnav a").forEach((a) => a.classList.remove("active"));
-    const navId = r.name === "browse" ? "nav-browse" : "nav-dash";
+    const navId = r.name === "browse" ? "nav-browse" : r.name === "list" ? "nav-list"
+      : r.name === "leaderboard" ? "nav-leaderboard" : "nav-dash";
     const navEl = document.getElementById(navId);
     if (navEl) navEl.classList.add("active");
     document.getElementById("main").scrollTop = 0;
@@ -456,21 +521,87 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
-        try { Store.importData(reader.result); route(); alert("Progress imported."); }
+        try { Store.importData(reader.result); route(); publishMyStats(); }
         catch (e) { alert("Could not read that file."); }
       };
       reader.readAsText(file);
     });
     document.getElementById("btn-reset").addEventListener("click", () => {
-      if (confirm("Reset all progress and notes? This cannot be undone.")) { Store.reset(); route(); }
+      if (confirm("Reset all progress and notes? This cannot be undone.")) { Store.reset(); route(); publishMyStats(); }
     });
+  }
+
+  // ---------- theme ----------
+  function syncThemeButton() {
+    const tt = document.documentElement.getAttribute("data-theme") || "dark";
+    const btn = document.getElementById("btn-theme");
+    if (!btn) return;
+    btn.textContent = tt === "light" ? "🌙" : "☀️";
+    btn.title = tt === "light" ? t("theme.toDark") : t("theme.toLight");
+  }
+  function wireTheme() {
+    const btn = document.getElementById("btn-theme");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = cur === "light" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem("qt_theme", next); } catch (e) {}
+      syncThemeButton();
+    });
+    syncThemeButton();
+  }
+
+  // ---------- language ----------
+  function applyStaticI18n() {
+    document.getElementById("brand-title").textContent = t("brand.title");
+    document.getElementById("nav-dash").textContent = t("nav.dashboard");
+    document.getElementById("nav-browse").textContent = t("nav.browse");
+    document.getElementById("nav-list").textContent = t("nav.list");
+    document.getElementById("btn-export").textContent = t("tool.export");
+    document.getElementById("btn-export").title = t("tool.export.title");
+    document.getElementById("btn-import").textContent = t("tool.import");
+    document.getElementById("btn-import").title = t("tool.import.title");
+    document.getElementById("btn-reset").textContent = t("tool.reset");
+    document.getElementById("btn-reset").title = t("tool.reset.title");
+    document.getElementById("btn-lang").title = t("lang.title");
+    document.title = t("brand.title");
+    syncThemeButton();
+  }
+  function wireLang() {
+    const btn = document.getElementById("btn-lang");
+    if (!btn || !window.I18n) return;
+    btn.addEventListener("click", () => window.I18n.toggle());
+    window.I18n.onChange(() => {
+      applyStaticI18n();
+      if (window.Auth) window.Auth.renderSlot(document.getElementById("auth-slot"));
+      route();
+    });
+  }
+
+  // ---------- auth ----------
+  function wireAuth() {
+    if (!window.Auth) return;
+    const slot = document.getElementById("auth-slot");
+    window.Auth.onChange((user) => {
+      window.Auth.renderSlot(slot);
+      if (user) publishMyStats();
+      else if (window.Leaderboard) window.Leaderboard.resetCache();
+      // refresh views that depend on sign-in state
+      const r = parseHash().name;
+      if (r === "problem" || r === "leaderboard") route();
+    });
+    window.Auth.init();
   }
 
   // ---------- boot ----------
   window.addEventListener("hashchange", route);
   window.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("brand-title").textContent = DATA.meta.title;
+    applyStaticI18n();
+    wireTheme();
+    wireLang();
     wireToolbar();
+    wireAuth();
     route();
   });
 })();

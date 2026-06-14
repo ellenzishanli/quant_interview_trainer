@@ -10,8 +10,15 @@ A personal study site for **_A Practical Guide to Quantitative Finance Interview
 - **Export / Import** your progress as a JSON file to back it up or move between devices.
 
 ## Content status
-- **Chapter 2 — Brain Teasers**: fully transcribed (all ~37 problems with solutions & takeaways).
-- **Chapters 3–7** (Calculus/Linear Algebra, Probability, Stochastic Calculus, Finance, Algorithms): every topic and problem title is scaffolded from the book's table of contents and shows as *"coming soon"*, ready to be filled in.
+**Complete — all 147 problems across all 6 chapters have full, original explanations** (intuition-first, worked step-by-step, with a one-line "key idea" takeaway):
+- **Ch 2 — Brain Teasers** (37)
+- **Ch 3 — Calculus & Linear Algebra** (19)
+- **Ch 4 — Probability Theory** (42)
+- **Ch 5 — Stochastic Process & Calculus** (16)
+- **Ch 6 — Finance** (18)
+- **Ch 7 — Algorithms & Numerical Methods** (15)
+
+Explanations are written from scratch in plain language (not copied from the book) to be *easier to follow than the source* — leading with the core idea, then building the reasoning, with tables/code where they help.
 
 ## Run it locally
 **Option A — just open the file.** Double-click `index.html`. (Needs internet the first time for the KaTeX/Markdown CDN scripts.)
