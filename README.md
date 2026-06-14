@@ -1,6 +1,6 @@
 # Quant Interview Trainer
 
-A personal study site for **_A Practical Guide to Quantitative Finance Interviews_** (Xinfeng Zhou, the "Green Book"). Practice problems, reveal solutions & key takeaways, and **track your progress** — all in the browser, no backend.
+A interactive study site for **_A Practical Guide to Quantitative Finance Interviews_** (Xinfeng Zhou, the "Green Book"). Practice problems, reveal solutions & key takeaways, and **track your progress** — all in the browser, no backend.
 
 ## Features
 - **Browse / filter** problems by chapter, topic, difficulty, status, tags, or full-text search.
